@@ -1,4 +1,7 @@
 <?php
+
+include("config.php");
+
 //XSS対応（ echoする場所で使用！それ以外はNG ）
 function h($str){
     return htmlspecialchars($str, ENT_QUOTES);
@@ -42,62 +45,32 @@ function sschk():void{
     }
     }
 
-// OpenAI APIとの通信関数
-function callOpenAIAPI($prompt) {
-    // OpenAI APIのエンドポイントURL
-    $url = OPENAI_API_URL;
+// 新しい関数: OpenAI APIを使用して質問を生成する
+function generate_question($purpose) {
+    $api_key =  OPENAI_API_KEY; // `config.php` から API キーを読み込み
+    $api_url = 'https://api.openai.com/v1/chat/completions';
 
-    // リクエストヘッダーの設定
-    $headers = [
-        'Authorization: Bearer ' . OPENAI_API_KEY,
-        'Content-Type: application/json'
-    ];
-
-    // リクエストボディの作成
     $data = [
-        'model' => 'gpt-3.5-turbo', // 使用するモデル
+        'model' => 'gpt-4o-mini',
         'messages' => [
-            ['role' => 'system', 'content' => 'あなたはインタビューの専門家です。与えられた目的に基づいて、適切な質問を1つ生成してください。'],
-            ['role' => 'user', 'content' => $prompt]
+            ['role' => 'system', 'content' => 'あなたはマーケターで、デプスインタビューの専門家です。与えられた目的に基づいて、適切な質問文を1つ生成してください。'],
+            ['role' => 'user', 'content' => $purpose]
         ],
-        'temperature' => 0.7 // 0.0から1.0の間で、生成されるテキストのランダム性を調整
+        'max_tokens' => 100,
     ];
 
-    // cURLでリクエストを送信
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $options = [
+        'http' => [
+            'header' => "Content-type: application/json\r\n" .
+                        "Authorization: Bearer $api_key\r\n",
+            'method' => 'POST',
+            'content' => json_encode($data),
+        ],
+    ];
 
-    try {
-        $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            throw new Exception('Curl error: ' . curl_error($ch));
-        }
+    $context = stream_context_create($options);
+    $response = file_get_contents($api_url, false, $context);
+    $result = json_decode($response, true);
 
-        $responseData = json_decode($response, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception('JSON decode error: ' . json_last_error_msg());
-        }
-
-        if (isset($responseData['choices'][0]['message']['content'])) {
-            return $responseData['choices'][0]['message']['content'];
-        } else {
-            throw new Exception('APIからの応答が不正です');
-        }
-    } finally {
-        curl_close($ch);
-    }
+    return $result['choices'][0]['message']['content'] ?? 'エラー: 質問を生成できませんでした。';
 }
-
-// 質問生成関数
-function generateQuestion($purpose) {
-    try {
-        return callOpenAIAPI("目的: $purpose");
-    } catch (Exception $e) {
-        error_log('Error calling OpenAI API: ' . $e->getMessage());
-        return '質問の生成中にエラーが発生しました。';
-    }
-}
-?>

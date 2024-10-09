@@ -1,16 +1,17 @@
 <?php
 include("funcs.php");
-include("config.php");
+session_start();
+sschk();
 $pdo = db_conn();
 
-// 質問生成の処理
-$generated_question = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_question'])) {
-    $purpose = $_POST['purpose'];
-    $generated_question = generateQuestion($purpose);
-    // 生成された質問をJSONで返す
-    echo json_encode(['question' => $generated_question]);
-    exit;
+$generated_question = "";
+$purpose = "";
+
+// OpenAI APIを使用して質問を生成する関数を呼び出し
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['purpose'])) {
+  $purpose = $_POST['purpose'];
+  $generated_question = generate_question($purpose);
+
 }
 
 
@@ -29,19 +30,6 @@ if($status==false) {
 $values =  $stmt->fetchAll(PDO::FETCH_ASSOC); //PDO::FETCH_ASSOC[カラム名のみで取得できるモード]
 $json = json_encode($values,JSON_UNESCAPED_UNICODE); //JSON化してJSに渡す場合
 
-//エラー
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_question'])) {
-  try {
-      $purpose = $_POST['purpose'];
-      $generated_question = generateQuestion($purpose);
-      echo json_encode(['question' => $generated_question]);
-  } catch (Exception $e) {
-      error_log('Error generating question: ' . $e->getMessage());
-      http_response_code(500);
-      echo json_encode(['error' => 'Internal server error: ' . $e->getMessage()]);
-  }
-  exit;
-}
 
 ?>
 
@@ -99,18 +87,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_question']))
         <h2 class="h4 mb-0">新規作成</h2>
       </div>
       <div class="card-body">
-        <form method="POST" action="design.insert.php" id="questionForm">
+      <form method="POST" action="" id="questionForm">
           <div class="form-floating mb-3">
-            <input type="text" class="form-control" id="purpose" name="purpose" placeholder="把握したいこと">
+            <input type="text" class="form-control" id="purpose" name="purpose" placeholder="把握したいこと" value="<?= h($purpose) ?>">
             <label for="purpose">把握したいこと</label>
           </div>
           <div class="form-floating mb-3">
-            <textarea class="form-control" id="question" name="question" style="height: 100px" placeholder="質問"></textarea>
+            <textarea class="form-control" id="question" name="question" style="height: 100px" placeholder="質問"><?= h($generated_question) ?></textarea>
             <label for="question">質問</label>
           </div>
-          <input type="hidden" name="generate_question" id="generate_question" value="0">
-          <button type="button" class="btn btn-secondary" id="generateBtn">質問を自動生成</button>
-          <button type="submit" class="btn btn-info">作成</button>
+          <button type="submit" class="btn btn-info" name="generate">質問を自動生成</button>
+          <?php if ($generated_question): ?>
+            <button type="submit" class="btn btn-primary" formaction="design.insert.php">保存</button>
+          <?php endif; ?>
         </form>
       </div>
     </div>
@@ -149,24 +138,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_question']))
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    document.getElementById('generateBtn').addEventListener('click', function() {
-      let purpose = document.getElementById('purpose').value;
-      let form = document.getElementById('questionForm');
-      let formData = new FormData(form);
-      formData.append('generate_question', '1');
-
-      fetch('design.php', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        document.getElementById('question').value = data.question;
-      })
-      .catch(error => console.error('Error:', error));
-    });
-  </script>
 
 </body>
 </html>
